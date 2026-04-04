@@ -13,13 +13,19 @@ from app.services.rule_engine import evaluate_rules
 from app.services.ml_model import predict_fraud
 from app.services.decision_engine import make_decision
 from app.services.audit_logger import log_decision
+<<<<<<< HEAD
 from app.utils.helpers import to_naive_utc
+=======
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
 
 router = APIRouter()
 @router.post("/submit", response_model=ClaimResponse, status_code=status.HTTP_201_CREATED)
 async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)):
+<<<<<<< HEAD
     normalized_claim_date = to_naive_utc(claim_in.claim_date)
 
+=======
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
     # 1. Fetch related Policy
     result = await db.execute(select(Policy).filter(Policy.id == claim_in.policy_id))
     policy = result.scalars().first()
@@ -40,7 +46,11 @@ async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)
         policy_id=claim_in.policy_id,
         customer_id=claim_in.customer_id,
         claim_amount=claim_in.claim_amount,
+<<<<<<< HEAD
         claim_date=normalized_claim_date,
+=======
+        claim_date=claim_in.claim_date,
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
         status=ClaimStatus.SUBMITTED
     )
     
@@ -106,3 +116,7 @@ async def get_claim(claim_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Claim not found.")
         
     return claim
+<<<<<<< HEAD
+=======
+
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b

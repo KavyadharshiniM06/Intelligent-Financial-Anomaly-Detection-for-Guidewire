@@ -114,6 +114,7 @@ The API will be available at:
 
 ---
 
+<<<<<<< HEAD
 ## 🖥️ React Frontend
 
 A lightweight standalone React frontend is available in the `frontend/` folder.
@@ -144,6 +145,8 @@ The frontend supports:
 
 ---
 
+=======
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
 ## 📡 API Endpoints
 
 | Method | Endpoint | Description |

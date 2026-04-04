@@ -1,5 +1,8 @@
 from fastapi import FastAPI
+<<<<<<< HEAD
 from fastapi.middleware.cors import CORSMiddleware
+=======
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
 from app.api.api import api_router
 from app.core.config import settings
 
@@ -10,6 +13,7 @@ app = FastAPI(
     description="Backend API for the Insurance Claim Risk Decision Engine"
 )
 
+<<<<<<< HEAD
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -23,6 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+=======
+>>>>>>> 7689bc54eb680a43842f663490cbbb7a72dcb83b
 # Includes all API endpoints
 app.include_router(api_router, prefix="/api/v1")
 
