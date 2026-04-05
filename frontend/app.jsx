@@ -81,8 +81,43 @@ function App() {
     result: null,
     error: "",
   });
+  const [adminConfig, setAdminConfig] = useState({
+    maxAmount: 50000,
+    loading: false,
+    error: "",
+  });
+  const [exportId, setExportId] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
 
   const resolvedApiBase = useMemo(() => normalizeBaseUrl(baseUrl), [baseUrl]);
+
+  // Fetch initial config on load
+  React.useEffect(() => {
+    fetchConfig();
+  }, [baseUrl]);
+
+  async function fetchConfig() {
+    try {
+      const data = await apiRequest(baseUrl, "/admin/config/MAX_CREDIBLE_AMOUNT", { method: "GET" });
+      setAdminConfig(prev => ({ ...prev, maxAmount: data.value }));
+    } catch (err) {
+      console.error("Failed to fetch system config:", err);
+    }
+  }
+
+  async function handleUpdateConfig() {
+    setAdminConfig(prev => ({ ...prev, loading: true, error: "" }));
+    try {
+      const data = await apiRequest(baseUrl, "/admin/config/MAX_CREDIBLE_AMOUNT", {
+        method: "PUT",
+        body: JSON.stringify({ value: Number(adminConfig.maxAmount) }),
+      });
+      setAdminConfig({ maxAmount: data.value, loading: false, error: "" });
+      alert("System Configuration Updated!");
+    } catch (err) {
+      setAdminConfig(prev => ({ ...prev, loading: false, error: err.message }));
+    }
+  }
 
   async function handleHealthCheck() {
     setHealthState({ loading: true, result: null, error: "" });
@@ -139,6 +174,32 @@ function App() {
       setAuditLookupState({ loading: false, result, error: "" });
     } catch (error) {
       setAuditLookupState({ loading: false, result: null, error: error.message });
+    }
+  }
+
+  async function handleExportAudit(event) {
+    event.preventDefault();
+    setExportLoading(true);
+    try {
+      const url = `${normalizeBaseUrl(baseUrl)}/audit/export/${exportId}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Export failed");
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `audit_history_cust_${exportId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setExportLoading(false);
+    } catch (error) {
+      setExportLoading(false);
+      alert(`Export Error: ${error.message}`);
     }
   }
 
@@ -199,10 +260,13 @@ function App() {
 
       <div className="grid">
         <section className="panel">
-          <h2>Submit Claim</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h2>Submit Claim</h2>
+            <StatusPill tone="ok">Smart Ingestion Active</StatusPill>
+          </div>
           <p className="panel-subtitle">
-            Use the demo customer and policy IDs after seeding, or your own IDs from Neon.
-            The API expects the policy to belong to the customer and still be active.
+            The engine now automatically pulls <strong>Vehicle Age</strong>, <strong>NCAP Rating</strong>, and 
+            <strong>Customer Demographics</strong> from the database based on the IDs provided.
           </p>
 
           <form onSubmit={handleClaimSubmit}>
@@ -284,6 +348,10 @@ function App() {
             <div className="result">
               <div className="result-grid">
                 <div className="metric">
+                  <span>Claim ID</span>
+                  <strong>{submitState.result.claim_id}</strong>
+                </div>
+                <div className="metric">
                   <span>Risk Score</span>
                   <strong>{submitState.result.risk_score}</strong>
                 </div>
@@ -294,10 +362,6 @@ function App() {
                 <div className="metric">
                   <span>Confidence</span>
                   <strong>{submitState.result.confidence}</strong>
-                </div>
-                <div className="metric">
-                  <span>API Base</span>
-                  <strong>{resolvedApiBase}</strong>
                 </div>
               </div>
               <div>
@@ -440,6 +504,72 @@ function App() {
         </section>
       </div>
 
+      <div className="grid">
+        <section className="panel administrative">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h2>Audit Evidence Export</h2>
+              <p className="panel-subtitle">Generate a professional CSV history of all risk decisions for a customer.</p>
+            </div>
+            <StatusPill tone="ok">CSV Generator</StatusPill>
+          </div>
+          <form onSubmit={handleExportAudit}>
+            <div className="field">
+              <label htmlFor="export_cust_id">Customer ID</label>
+              <input
+                id="export_cust_id"
+                type="number"
+                min="1"
+                value={exportId}
+                onChange={(event) => setExportId(event.target.value)}
+                placeholder="Enter customer ID (e.g. 13)"
+              />
+            </div>
+            <div className="button-row" style={{ marginTop: '1rem' }}>
+              <button className="primary" type="submit" disabled={exportLoading || !exportId} style={{ width: '100%' }}>
+                {exportLoading ? "Generating CSV..." : "Download Audit Evidence (.csv)"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="panel administrative">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h2>System Configuration</h2>
+              <p className="panel-subtitle">Manage global risk thresholds and hard limits for the automated engine.</p>
+            </div>
+            <StatusPill tone={adminConfig.error ? "error" : "ok"}>Live Engine Settings</StatusPill>
+          </div>
+
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="max-credible-amount">Max Credible Amount (USD)</label>
+            <input
+              id="max-credible-amount"
+              type="number"
+              value={adminConfig.maxAmount}
+              onChange={(event) => setAdminConfig(prev => ({ ...prev, maxAmount: event.target.value }))}
+              placeholder="e.g. 50000"
+            />
+            <p className="footer-note" style={{ marginTop: '0.5rem' }}>
+              Claims exceeding this amount will trigger an <strong>Absolute Risk Alert</strong>. 
+              Claims exceeding 2x this amount will be <strong>Automatically Rejected</strong>.
+            </p>
+          </div>
+          <div className="field" style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2.4rem' }}>
+            <button 
+              className="primary" 
+              onClick={handleUpdateConfig} 
+              disabled={adminConfig.loading}
+              style={{ width: '100%' }}
+            >
+              {adminConfig.loading ? "Updating..." : "Update System Config"}
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section className="panel">
         <h2>Working Notes</h2>
         <p className="panel-subtitle">
@@ -450,8 +580,10 @@ function App() {
           <li>Seed demo records with `python -m app.db.seed_demo` to get a valid customer and policy pair.</li>
           <li>Run this frontend from `frontend/` using `python -m http.server 3000` for a quick local server.</li>
           <li>Keep the FastAPI backend running separately on port `8000` while using the UI.</li>
+          <li><strong>Tip</strong>: Use the System Configuration below to test "Hard Rejection" for massive claims.</li>
         </ul>
       </section>
+    </div>
     </div>
   );
 }

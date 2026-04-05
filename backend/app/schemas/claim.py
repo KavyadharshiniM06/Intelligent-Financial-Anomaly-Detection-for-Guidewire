@@ -13,11 +13,18 @@ class ClaimCreate(BaseModel):
         default_factory=datetime.utcnow, 
         description="The exact datetime the claim occurred. Defaults to now."
     )
+    # Optional fields for enhanced risk evaluation during demo
+    incident_severity: str = Field(default="minor damage", description="Severity of the accident")
+    vehicle_age: int = Field(default=5, description="Age of the vehicle in years")
+    ncap_rating: int = Field(default=4, description="NCAP safety rating of the vehicle")
+    customer_age: int = Field(default=35, description="Age of the customer")
+    region_density: int = Field(default=1, description="Population density of the region (0-4)")
 
 class ClaimResponse(BaseModel):
     """
     Schema for formatting the response after processing a claim.
     """
+    claim_id: int = Field(..., description="The unique identifier for the recorded claim")
     risk_score: float = Field(..., ge=0.0, le=1.0, description="Computed risk score formatted between 0.0 and 1.0")
     decision: str = Field(..., description="The final automated action taken by the decision engine")
     reasons: List[str] = Field(

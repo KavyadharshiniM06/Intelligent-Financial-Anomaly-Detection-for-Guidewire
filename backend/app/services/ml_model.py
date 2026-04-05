@@ -1,40 +1,57 @@
-import math
+import os
+import joblib
+import logging
+import numpy as np
 from typing import Dict, Any
 
-def predict_fraud(features: Dict[str, Any]) -> float:
+logger = logging.getLogger(__name__)
+
+# Constants for artifact persistence
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pkl")
+SCALER_PATH = os.path.join(os.path.dirname(__file__), "scaler.pkl")
+
+# Global variables for loaded artifacts
+_model = None
+_scaler = None
+
+def init_model():
+    """Explicitly load the model and scaler artifacts into memory."""
+    global _model, _scaler
+    if _model is None or _scaler is None:
+        try:
+            logger.info(f"Loading ML artifacts from {os.path.dirname(MODEL_PATH)}")
+            _model = joblib.load(MODEL_PATH)
+            _scaler = joblib.load(SCALER_PATH)
+            logger.info("ML artifacts loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load ML artifacts: {e}")
+            raise RuntimeError("ML artifacts are missing or corrupt. Run training first.")
+
+def predict_fraud(feature_vector: np.ndarray) -> float:
     """
-    Predicts the likelihood of a claim being fraudulent using a lightweight,
-    placeholder Logistic Regression algorithm.
+    Predicts fraud probability using the loaded RandomForest model.
+    Expects a pre-shaped (1, 12) numpy array.
+    """
+    init_model()
     
-    Inputs:
-        features: A dictionary containing computed features for the claim.
-        
-    Returns:
-        float: A probability between 0.0 and 1.0.
-    """
-    # Extract features with safe fallbacks
+    # Scale features
+    X_scaled = _scaler.transform(feature_vector)
+    
+    # Predict probability of class 1 (Fraud)
+    # RandomForestClassifier.predict_proba returns [prob_0, prob_1]
+    probs = _model.predict_proba(X_scaled)
+    probability = float(probs[0][1])
+    
+    return round(probability, 4)
+
+# Keep legacy helper for backward compatibility if needed, but mark as deprecated
+def predict_fraud_legacy(features: Dict[str, Any]) -> float:
+    """Mock fallback for older feature pipelines."""
+    logger.warning("Using legacy mock prediction logic. Transition to feature vectors recommended.")
     total_claims = features.get("total_claims", 0)
-    average_claim_amount = features.get("average_claim_amount", 0.0)
     recent_claims_count = features.get("recent_claims_count", 0)
     
-    # Mock model weights (simulating a pre-trained logistic regression)
-    # In a production setting, you would load a pickled Scikit-Learn or XGBoost model
-    bias = -3.5  # Base log-odds (assumes baseline is unlikely to be fraud)
-    w_total_claims = 0.05
-    w_avg_amount = 0.001
-    w_recent_claims = 0.8
-    
-    # Calculate linear combination (z = w0 + w1*x1 + w2*x2 + ...)
-    z = (bias + 
-         (w_total_claims * total_claims) + 
-         (w_avg_amount * average_claim_amount) + 
-         (w_recent_claims * recent_claims_count))
-         
-    # Apply the Sigmoid activated function to squish `z` into a 0 -> 1 probability
-    try:
-        probability = 1.0 / (1.0 + math.exp(-z))
-    except OverflowError:
-        # Handles math overflow: if z is a massive negative number, probability is practically 0.
-        probability = 0.0 if z < 0 else 1.0
-        
-    return round(probability, 4)
+    # Simple heuristic to simulate some variance
+    z = -3.0 + (0.5 * total_claims) + (1.2 * recent_claims_count)
+    import math
+    return round(1.0 / (1.0 + math.exp(-z)), 4)

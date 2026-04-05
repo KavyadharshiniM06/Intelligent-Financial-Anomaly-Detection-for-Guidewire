@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, Enum, String
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import Base
@@ -18,6 +18,7 @@ class Claim(Base):
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
     claim_amount = Column(Float, nullable=False)
     claim_date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    incident_severity = Column(String, nullable=False, default="minor damage")
     status = Column(Enum(ClaimStatus), default=ClaimStatus.SUBMITTED, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

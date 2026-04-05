@@ -5,6 +5,7 @@ from sqlalchemy.future import select
 from app.schemas.claim import ClaimCreate, ClaimResponse, ClaimDetail
 from app.models.claim import Claim, ClaimStatus
 from app.models.policy import Policy
+from app.models.customer import Customer
 from app.db.session import get_db
 
 from app.utils.validators import validate_policy_active, validate_customer_policy
@@ -13,16 +14,24 @@ from app.services.rule_engine import evaluate_rules
 from app.services.ml_model import predict_fraud
 from app.services.decision_engine import make_decision
 from app.services.audit_logger import log_decision
+from app.models.system_config import SystemConfig
 
 router = APIRouter()
 @router.post("/submit", response_model=ClaimResponse, status_code=status.HTTP_201_CREATED)
 async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Fetch related Policy
-    result = await db.execute(select(Policy).filter(Policy.id == claim_in.policy_id))
-    policy = result.scalars().first()
+    # 1. Fetch related Policy, Customer, and System Configuration
+    policy_res = await db.execute(select(Policy).filter(Policy.id == claim_in.policy_id))
+    policy = policy_res.scalars().first()
     
-    if not policy:
-        raise HTTPException(status_code=404, detail="Policy not found.")
+    customer_res = await db.execute(select(Customer).filter(Customer.id == claim_in.customer_id))
+    customer = customer_res.scalars().first()
+    
+    config_res = await db.execute(select(SystemConfig).filter(SystemConfig.id == "MAX_CREDIBLE_AMOUNT"))
+    max_amount_config = config_res.scalars().first()
+    max_amount = max_amount_config.value if max_amount_config else 50000.0
+    
+    if not policy or not customer:
+        raise HTTPException(status_code=404, detail="Policy or Customer not found.")
         
     # 2. Run Validators
     try:
@@ -37,7 +46,8 @@ async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)
         policy_id=claim_in.policy_id,
         customer_id=claim_in.customer_id,
         claim_amount=claim_in.claim_amount,
-        claim_date=claim_in.claim_date,
+        claim_date=claim_in.claim_date.replace(tzinfo=None),
+        incident_severity=claim_in.incident_severity,
         status=ClaimStatus.SUBMITTED
     )
     
@@ -52,10 +62,41 @@ async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)
     customer_claims = claims_result.scalars().all()
     
     # 5. Execute Pipeline Core
-    features = compute_claim_features(new_claim, customer_claims)
-    rule_score, reasons = evaluate_rules(new_claim, policy, features)
-    ml_score = predict_fraud(features)
+    # A. Build the unified 12-feature vector for the ML model
+    # Priority: Use DB values if present, else fallback to payload, then defaults.
+    inference_payload = {
+        "claim_data": {
+            "vehicle_age": getattr(policy, "vehicle_age", claim_in.vehicle_age),
+            "ncap_rating": getattr(policy, "ncap_rating", claim_in.ncap_rating),
+            "incident_severity": claim_in.incident_severity,
+            "claim_amount": claim_in.claim_amount,
+            "days_since_policy_start": (new_claim.claim_date - policy.start_date).days
+        },
+        "customer_data": {
+            "customer_age": getattr(customer, "age", claim_in.customer_age),
+            "region_density": getattr(customer, "region_density", claim_in.region_density),
+            "subscription_length": (new_claim.claim_date - policy.start_date).days / 365.25
+        },
+        "behavioral_data": None 
+    }
+    from app.services.feature_engine import build_feature_vector
+    feature_vector = build_feature_vector(inference_payload)
+    
+    # B. ML Prediction (RandomForest probability)
+    ml_score = predict_fraud(feature_vector)
+    
+    # C. Rule Evaluation (Legacy features for backward rules compatibility)
+    legacy_features = compute_claim_features(new_claim, customer_claims)
+    rule_score, reasons = evaluate_rules(new_claim, policy, legacy_features, max_amount=max_amount)
+    
+    # D. Final Decision Logic
     final_score, decision = make_decision(ml_score, rule_score)
+    
+    # E. Hard-Override for Excessive Amounts
+    if claim_in.claim_amount > (max_amount * 2):
+        decision = "REJECT"
+        if "Hard-Limit Alert" not in " ".join(reasons):
+            reasons.append(f"Security Override: Claim amount greatly exceeds credible limit (${max_amount})")
     
     # 6. Update the original claim status corresponding to the decision map
     if decision == "APPROVE":
@@ -85,6 +126,7 @@ async def submit_claim(claim_in: ClaimCreate, db: AsyncSession = Depends(get_db)
         confidence = "HIGH RISK"
         
     return ClaimResponse(
+        claim_id=new_claim.id,
         risk_score=final_score,
         decision=decision,
         reasons=reasons,
