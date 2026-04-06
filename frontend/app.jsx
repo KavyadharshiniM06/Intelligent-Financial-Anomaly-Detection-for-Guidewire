@@ -88,12 +88,18 @@ function App() {
   });
   const [exportId, setExportId] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
+  const [customersState, setCustomersState] = useState({
+    loading: false,
+    data: [],
+    error: "",
+  });
 
   const resolvedApiBase = useMemo(() => normalizeBaseUrl(baseUrl), [baseUrl]);
 
   // Fetch initial config on load
   React.useEffect(() => {
     fetchConfig();
+    fetchCustomers();
   }, [baseUrl]);
 
   async function fetchConfig() {
@@ -102,6 +108,16 @@ function App() {
       setAdminConfig(prev => ({ ...prev, maxAmount: data.value }));
     } catch (err) {
       console.error("Failed to fetch system config:", err);
+    }
+  }
+
+  async function fetchCustomers() {
+    setCustomersState({ loading: true, data: [], error: "" });
+    try {
+      const data = await apiRequest(baseUrl, "/customers/", { method: "GET" });
+      setCustomersState({ loading: false, data, error: "" });
+    } catch (err) {
+      setCustomersState({ loading: false, data: [], error: err.message });
     }
   }
 
@@ -568,6 +584,82 @@ function App() {
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="panel registry-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <div>
+            <h2>Customer Directory</h2>
+            <p className="panel-subtitle">All registered customers with their policy details and computed risk profiles.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <StatusPill tone={customersState.error ? "error" : customersState.data.length ? "ok" : "warn"}>
+              {customersState.loading ? "Loading..." : customersState.error ? "Failed" : `${customersState.data.length} Customers`}
+            </StatusPill>
+            <button className="ghost" onClick={fetchCustomers} disabled={customersState.loading} style={{ fontSize: '0.85rem', padding: '8px 14px' }}>
+              {customersState.loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+        </div>
+
+        {customersState.error && (
+          <div className="result">
+            <StatusPill tone="error">{customersState.error}</StatusPill>
+          </div>
+        )}
+
+        {customersState.data.length > 0 ? (
+          <div className="registry-table-wrap">
+            <table className="registry-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Policy</th>
+                  <th>Density Level</th>
+                  <th>Profile Description</th>
+                  <th>Risk Tier</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customersState.data.map((cust) => (
+                  <tr key={cust.customer_id}>
+                    <td>
+                      <div className="customer-name">{cust.name}</div>
+                      <div className="customer-id">ID: {cust.customer_id} · Age {cust.age}</div>
+                    </td>
+                    <td>
+                      {cust.policy_id ? (
+                        <div>
+                          <div style={{ fontWeight: 600 }}>{cust.policy_type}</div>
+                          <div className="customer-id">Policy #{cust.policy_id} · NCAP {cust.ncap_rating} · {cust.vehicle_age}yr vehicle</div>
+                        </div>
+                      ) : (
+                        <span className="customer-id">No policy</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="density-chip">{cust.density_label}</span>
+                    </td>
+                    <td>
+                      <div className="profile-tags">
+                        {cust.profile_description.split(" · ").map((tag, i) => (
+                          <span className="profile-tag" key={i}>{tag}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`tier-badge ${cust.risk_tier}`}>
+                        {cust.risk_tier === "safe" ? "✅ Safe" : cust.risk_tier === "moderate" ? "⚠️ Moderate" : "🔴 High Risk"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : !customersState.loading && !customersState.error ? (
+          <div className="empty-state">No customers found. Run <code>python -m app.db.seed_demo</code> to seed demo data.</div>
+        ) : null}
       </section>
 
       <section className="panel">

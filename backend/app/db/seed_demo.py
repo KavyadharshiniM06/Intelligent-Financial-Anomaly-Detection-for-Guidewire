@@ -28,7 +28,7 @@ async def seed_demo_data():
             await db.commit()
             print("Seeded default MAX_CREDIBLE_AMOUNT: 50,000")
         # 2. Reset existing demo names
-        demo_emails = ["niranjan@guidewire.com", "rahul@guidewire.com", "kavya@guidewire.com", "demo.user@guidewire.com"]
+        demo_emails = ["niranjan@guidewire.com", "rahul@guidewire.com", "kavya@guidewire.com", "demo.user@guidewire.com", "rohan.123@guidewire.com"]
         for email in demo_emails:
             res = await db.execute(select(Customer.id).where(Customer.email == email))
             ids = res.scalars().all()
@@ -79,24 +79,42 @@ async def seed_demo_data():
         )
         db.add(pol3)
         await db.flush()
+
         
         # Create suspicious historical claims for Kavya
         db.add_all([
-            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=100.0, claim_date=datetime.utcnow()-timedelta(days=30), status=ClaimStatus.APPROVED, incident_severity="minor damage"),
-            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=150.0, claim_date=datetime.utcnow()-timedelta(days=20), status=ClaimStatus.APPROVED, incident_severity="minor damage"),
-            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=120.0, claim_date=datetime.utcnow()-timedelta(days=10), status=ClaimStatus.APPROVED, incident_severity="minor damage"),
+            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=1000.0, claim_date=datetime.utcnow()-timedelta(days=30), status=ClaimStatus.APPROVED, incident_severity="minor damage"),
+            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=1500.0, claim_date=datetime.utcnow()-timedelta(days=20), status=ClaimStatus.APPROVED, incident_severity="major repair"),
+            Claim(customer_id=kavya.id, policy_id=pol3.id, claim_amount=1200.0, claim_date=datetime.utcnow()-timedelta(days=10), status=ClaimStatus.APPROVED, incident_severity="broken in a riot"),
         ])
         
+         # Archetype 4: Rohan (Target: Not decided) - New, High Severity, Veteran
+        rohan = Customer(name="Rohan", email="rohan.123@guidewire.com", age=25, region_density=3)
+        db.add(rohan)
+        await db.flush()
+
+        pol4 = Policy(
+            customer_id=rohan.id,
+            policy_type="Premium Auto",
+            vehicle_age=2,
+            ncap_rating=5,
+            start_date=datetime.utcnow() - timedelta(days=3650),
+            end_date=datetime.utcnow() + timedelta(days=365)
+        )
+        db.add(pol4)
+        await db.flush()
+
         await db.commit()
         
-        print("\n--- ✅ Advanced Archetypes Seeded Successfully ---")
+        print("\n--- Advanced Archetypes Seeded Successfully ---")
         print(f"1. Niranjan [ID: {niranjan.id}] -> Policy [ID: {pol1.id}] (Safe)")
         print(f"2. Rahul    [ID: {rahul.id}] -> Policy [ID: {pol2.id}] (New/Rookie)")
         print(f"3. Kavya    [ID: {kavya.id}] -> Policy [ID: {pol3.id}] (High Risk Urban)")
+        print(f"4. Rohan    [ID: {rohan.id}] -> Policy [ID: {pol4.id}] (High Risk but Veteran)")
         print("--------------------------------------------------")
 
     except Exception as e:
-        print(f"--- ❌ Seeding Failed: {e} ---")
+        print(f"---Seeding Failed: {e} ---")
         await db.rollback()
     finally:
         await db.close()
