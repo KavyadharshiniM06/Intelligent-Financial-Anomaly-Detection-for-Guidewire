@@ -8,6 +8,9 @@
 
 An **Intelligent Claim Risk Decision Engine** designed to seamlessly integrate with **Guidewire** ecosystems. This backend service leverages modern asynchronous Python to detect financial anomalies, evaluate insurance claim risks, and maintain a robust audit trail for high-stakes insurance environments.
 
+
+Check out the website:** https://financialriskanalysis.netlify.app/**
+
 ---
 
 ## 🚀 Key Features
@@ -127,8 +130,7 @@ The API will be available at:
 
 ## 📸 Screenshots
 
-<!-- INSERT SWAGGER UI SCREENSHOT HERE -->
-*(Caption: Interactive API Documentation via Swagger UI)*
+
 
 ---
 
