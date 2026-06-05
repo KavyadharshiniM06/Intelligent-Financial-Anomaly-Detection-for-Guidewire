@@ -57,7 +57,14 @@ function StatusPill({ tone, children }) {
 }
 
 function App() {
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
+  const [baseUrl, setBaseUrl] = useState(() => {
+    return localStorage.getItem("risk_engine_backend_url") || "http://127.0.0.1:8000";
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem("risk_engine_backend_url", baseUrl);
+  }, [baseUrl]);
+
   const [healthState, setHealthState] = useState({
     loading: false,
     result: null,
