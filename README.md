@@ -130,7 +130,8 @@ The API will be available at:
 
 ## 📸 Screenshots
 
-
+![HealthCheck of Backend API](SS1.png)
+![Risk Score and User Data Retrieval](SS2.png)
 
 ---
 
